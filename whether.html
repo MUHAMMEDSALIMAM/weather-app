@@ -1,0 +1,388 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<title>Weather Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 30px;
+  font-family: Arial, sans-serif;
+  background: linear-gradient(135deg, #102a20, #183f30);
+  color: wheat;
+  min-height: 100vh;
+}
+
+.container {
+  max-width: 850px;
+  margin: auto;
+  text-align: center;
+}
+
+h1 {
+  color: #b9f6ca;
+}
+
+.search {
+  display: flex;
+  gap: 10px;
+  margin: 20px 0;
+}
+
+input {
+  flex: 1;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #39765a;
+  border-radius: 8px;
+}
+
+button {
+  padding: 11px 15px;
+  border: none;
+  border-radius: 8px;
+  background: #31845a;
+  color: white;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #246b47;
+}
+
+.box {
+  background: #214d3a;
+  border: 1px solid #39765a;
+  border-radius: 12px;
+  padding: 18px;
+  margin: 15px 0;
+}
+
+#weather, #forecast, #skeleton {
+  display: none;
+}
+
+#loading {
+  display: none;
+  margin: 15px;
+}
+
+#icon {
+  width: 90px;
+}
+
+.details, .forecast {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+}
+
+.forecast .box {
+  margin: 0;
+}
+
+.skeleton {
+  height: 15px;
+  background: #39765a;
+  margin: 12px;
+  border-radius: 8px;
+  animation: blink 1s infinite alternate;
+}
+
+@keyframes blink {
+  from { opacity: .4; }
+  to { opacity: 1; }
+}
+
+#suggestions {
+  text-align: left;
+}
+
+.suggestion {
+  background: #214d3a;
+  padding: 10px;
+  cursor: pointer;
+  border-bottom: 1px solid #39765a;
+}
+
+#error {
+  color: #ff7777;
+}
+
+.dark {
+  background: #080f0b;
+}
+
+.dark .box, .dark .suggestion {
+  background: #142b20;
+}
+
+@media(max-width: 500px) {
+  body {
+    padding: 12px;
+  }
+
+  .search {
+    flex-direction: column;
+  }
+
+  button {
+    width: 100%;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h1>🌦 Weather Dashboard</h1>
+
+<div class="search">
+  <input id="city" placeholder="Enter city name">
+  <button onclick="searchWeather()">Search</button>
+  <button onclick="toggleTheme()">🌙</button>
+</div>
+
+<div id="suggestions"></div>
+<p id="loading">Loading weather...</p>
+<p id="error"></p>
+
+<div id="skeleton" class="box">
+  <div class="skeleton"></div>
+  <div class="skeleton"></div>
+  <div class="skeleton"></div>
+</div>
+
+<div id="weather" class="box">
+  <h2 id="name"></h2>
+  <img id="icon">
+  <h1 id="temp"></h1>
+  <p id="desc"></p>
+
+  <div class="details">
+    <div class="box">
+      <h3>Feels Like</h3>
+      <p id="feels"></p>
+    </div>
+
+    <div class="box">
+      <h3>Humidity</h3>
+      <p id="humidity"></p>
+    </div>
+
+    <div class="box">
+      <h3>Wind</h3>
+      <p id="wind"></p>
+    </div>
+  </div>
+
+  <button onclick="addFavorite()">❤️ Add Favorite</button>
+</div>
+
+<h2>5 Day Forecast</h2>
+<div id="forecast" class="forecast"></div>
+
+<h2>❤️ Favorite Cities</h2>
+<div id="favorites"></div>
+
+</div>
+
+<script>
+const API_KEY = "e3b0e1433ec3a72b6aee5b84c3881f0a";
+
+const cityInput = document.getElementById("city");
+const weatherBox = document.getElementById("weather");
+const forecastBox = document.getElementById("forecast");
+const errorMsg = document.getElementById("error");
+const loadingBox = document.getElementById("loading");
+const skeletonBox = document.getElementById("skeleton");
+const suggestionsBox = document.getElementById("suggestions");
+const favoritesBox = document.getElementById("favorites");
+
+let currentCity = "";
+let timer;
+
+async function searchWeather(city = cityInput.value) {
+  if (!city.trim()) {
+    errorMsg.innerText = "Enter a city!";
+    return;
+  }
+
+  errorMsg.innerText = "";
+  suggestionsBox.innerHTML = "";
+  loadingBox.style.display = "block";
+  skeletonBox.style.display = "block";
+  weatherBox.style.display = "none";
+  forecastBox.style.display = "none";
+
+  try {
+    let url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${API_KEY}&units=metric`;
+    let response = await fetch(url);
+
+    if (!response.ok) throw new Error("City not found!");
+
+    let data = await response.json();
+
+    currentCity = data.name;
+    cityInput.value = currentCity;
+
+    document.getElementById("name").innerText = data.name;
+    document.getElementById("temp").innerText = data.main.temp + "°C";
+    document.getElementById("desc").innerText = data.weather[0].description;
+    document.getElementById("feels").innerText = data.main.feels_like + "°C";
+    document.getElementById("humidity").innerText = data.main.humidity + "%";
+    document.getElementById("wind").innerText = data.wind.speed + " m/s";
+
+    document.getElementById("icon").src =
+      `https://openweathermap.org/img/wn/${data.weather[0].icon}@2x.png`;
+
+    await getForecast(currentCity);
+
+    weatherBox.style.display = "block";
+
+  } catch (error) {
+    errorMsg.innerText = error.message;
+  } finally {
+    loadingBox.style.display = "none";
+    skeletonBox.style.display = "none";
+  }
+}
+
+async function getForecast(city) {
+  let url = `https://api.openweathermap.org/data/2.5/forecast?q=${encodeURIComponent(city)}&appid=${API_KEY}&units=metric`;
+
+  let response = await fetch(url);
+
+  if (!response.ok) throw new Error("Forecast unavailable!");
+
+  let data = await response.json();
+
+  let days = [];
+
+  data.list.forEach(item => {
+    let date = item.dt_txt.split(" ")[0];
+
+    if (!days.includes(date) && days.length < 5) {
+      days.push(date);
+    }
+  });
+
+  forecastBox.innerHTML = "";
+
+  days.forEach(day => {
+    let item = data.list.find(x => x.dt_txt.startsWith(day));
+
+    forecastBox.innerHTML += `
+      <div class="box">
+        <h3>${day}</h3>
+        <img src="https://openweathermap.org/img/wn/${item.weather[0].icon}.png">
+        <p>${item.main.temp}°C</p>
+        <p>${item.weather[0].description}</p>
+      </div>
+    `;
+  });
+
+  forecastBox.style.display = "grid";
+}
+
+function addFavorite() {
+  if (!currentCity) return;
+
+  let fav = JSON.parse(localStorage.getItem("favorites")) || [];
+
+  if (!fav.includes(currentCity)) {
+    fav.push(currentCity);
+    localStorage.setItem("favorites", JSON.stringify(fav));
+  }
+
+  showFavorites();
+}
+
+function showFavorites() {
+  let fav = JSON.parse(localStorage.getItem("favorites")) || [];
+
+  favoritesBox.innerHTML = "";
+
+  fav.forEach(city => {
+    favoritesBox.innerHTML += `
+      <div class="box">
+        ${city}
+        <button onclick="searchWeather('${city.replace(/'/g, "\\'")}')">View</button>
+        <button onclick="removeFavorite('${city.replace(/'/g, "\\'")}')">Remove</button>
+      </div>
+    `;
+  });
+}
+
+function removeFavorite(city) {
+  let fav = JSON.parse(localStorage.getItem("favorites")) || [];
+
+  fav = fav.filter(x => x !== city);
+
+  localStorage.setItem("favorites", JSON.stringify(fav));
+  showFavorites();
+}
+
+function toggleTheme() {
+  document.body.classList.toggle("dark");
+}
+
+cityInput.addEventListener("input", () => {
+  clearTimeout(timer);
+
+  let city = cityInput.value.trim();
+
+  if (city.length < 2) {
+    suggestionsBox.innerHTML = "";
+    return;
+  }
+
+  timer = setTimeout(() => getSuggestions(city), 500);
+});
+
+async function getSuggestions(city) {
+  try {
+    let url = `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(city)}&limit=5&appid=${API_KEY}`;
+
+    let response = await fetch(url);
+    if (!response.ok) return;
+
+    let data = await response.json();
+
+    suggestionsBox.innerHTML = "";
+
+    data.forEach(item => {
+      let div = document.createElement("div");
+      div.className = "suggestion";
+      div.innerText = item.name + ", " + (item.country || "");
+
+      div.onclick = () => {
+        cityInput.value = item.name;
+        searchWeather(item.name);
+      };
+
+      suggestionsBox.appendChild(div);
+    });
+
+  } catch (error) {
+    suggestionsBox.innerHTML = "";
+  }
+}
+
+cityInput.addEventListener("keydown", event => {
+  if (event.key === "Enter") searchWeather();
+});
+
+showFavorites();
+</script>
+
+</body>
+</html>
